@@ -65,7 +65,7 @@ Deployed via Docker + Nginx reverse proxy (same pattern as forgecadneo.neocodehu
 
 - Docker & Docker Compose on the server
 - Nginx with Certbot for SSL
-- DNS A record pointing `leads.neocodehub.com` to your server IP
+- DNS A record pointing `leadsneoforge.neocodehub.com` to your server IP
 
 ### Step-by-Step
 
@@ -86,7 +86,7 @@ chmod +x deploy.sh
 # 4. Set up Nginx + SSL (first time only)
 sudo cp deploy/nginx-site.conf /etc/nginx/sites-available/leadsneoforge
 sudo ln -s /etc/nginx/sites-available/leadsneoforge /etc/nginx/sites-enabled/
-sudo certbot --nginx -d leads.neocodehub.com
+sudo certbot --nginx -d leadsneoforge.neocodehub.com
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
@@ -95,7 +95,7 @@ sudo nginx -t && sudo systemctl reload nginx
 ```
 Internet
   └── Nginx (port 443, SSL via Let's Encrypt)
-        └── leads.neocodehub.com
+        └── leadsneoforge.neocodehub.com
               └── proxy_pass http://127.0.0.1:3001
                     └── Docker: leadsneoforge-app (Next.js standalone)
                           └── /app/data (persistent volume)
