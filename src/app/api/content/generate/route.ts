@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { callClaude, isClaudeConfigured, PRODUCT_CONTEXT } from "@/lib/claude";
+import { callAI, isAIConfigured, PRODUCT_CONTEXT } from "@/lib/ai";
 
 interface ContentGenerateRequest {
   platform: string;
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!isClaudeConfigured()) {
+    if (!isAIConfigured()) {
       const fallback = generateTemplateContent({ platform, contentType, topic, productName });
       return NextResponse.json({
         data: {
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
           contentType,
           characterCount: fallback.length,
           method: "template",
-          message: "Generated using templates (add ANTHROPIC_API_KEY for Claude-powered content)",
+          message: "Generated using templates (add GROQ_API_KEY for AI-powered content)",
         },
       });
     }
@@ -82,7 +82,7 @@ Tone: ${tone}${productContext}${extra}
 
 Generate the content now. Only output the content.`;
 
-    const result = await callClaude({
+    const result = await callAI({
       system: systemPrompt,
       prompt: userPrompt,
       temperature: 0.7,
@@ -94,10 +94,10 @@ Generate the content now. Only output the content.`;
         platform,
         contentType,
         characterCount: result.text.length,
-        method: "claude",
+        method: "groq",
         model: result.model,
         tokens: result.inputTokens + result.outputTokens,
-        message: `Claude-generated ${platform} content`,
+        message: `AI-generated ${platform} content`,
       },
     });
   } catch (error) {

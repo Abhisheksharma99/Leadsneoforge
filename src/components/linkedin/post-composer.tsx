@@ -91,7 +91,7 @@ export function LinkedInPostComposer({ open, onClose }: LinkedInPostComposerProp
       setGeneratedContent(result.data.content);
       setMethod(result.data.method);
       if (result.data.method === "template") {
-        toast.info("Using template (add ANTHROPIC_API_KEY for AI posts)");
+        toast.info("Using template (add GROQ_API_KEY for AI posts)");
       } else {
         toast.success(`Post generated (${result.data.tokens} tokens)`);
       }

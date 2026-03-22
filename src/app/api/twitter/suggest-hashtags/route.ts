@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { callClaude, isClaudeConfigured } from "@/lib/claude";
+import { callAI, isAIConfigured } from "@/lib/ai";
 
 interface SuggestHashtagsRequest {
   topic: string;
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!isClaudeConfigured()) {
+    if (!isAIConfigured()) {
       const fallback = generateTemplateHashtags(topic, platform, count);
       return NextResponse.json({
         data: {
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
           topic,
           platform,
           method: "template",
-          message: "Generated using templates (add ANTHROPIC_API_KEY for Claude-powered suggestions)",
+          message: "Generated using templates (add GROQ_API_KEY for AI-powered suggestions)",
         },
       });
     }
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
 
 Return the JSON array now.`;
 
-    const result = await callClaude({
+    const result = await callAI({
       system: SYSTEM_PROMPT,
       prompt: userPrompt,
       temperature: 0.6,
@@ -76,10 +76,10 @@ Return the JSON array now.`;
         suggestions,
         topic,
         platform,
-        method: "claude",
+        method: "groq",
         model: result.model,
         tokens: result.inputTokens + result.outputTokens,
-        message: "Claude-generated hashtag suggestions",
+        message: "AI-generated hashtag suggestions",
       },
     });
   } catch (error) {

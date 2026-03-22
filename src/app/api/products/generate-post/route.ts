@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
 import type { Product } from "@/types";
-import { callClaude, isClaudeConfigured } from "@/lib/claude";
+import { callAI, isAIConfigured } from "@/lib/ai";
 
 const DATA_DIR =
   process.env.DATA_DIR || process.cwd() + "/data";
@@ -46,8 +46,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (isClaudeConfigured()) {
-      // AI generation via Claude
+    if (isAIConfigured()) {
+      // AI generation via Groq
       try {
         const systemPrompt = `You are a Reddit marketing expert. Generate an authentic, non-promotional Reddit post for r/${subreddit}. The post should provide genuine value while naturally mentioning the product. Do NOT make it look like an ad. Write in a conversational tone that fits r/${subreddit}.
 
@@ -65,7 +65,7 @@ URL: ${product.url}
 Key Features: ${product.features.join(", ")}
 Keywords: ${product.keywords.join(", ")}`;
 
-        const result = await callClaude({
+        const result = await callAI({
           system: systemPrompt,
           prompt: userPrompt,
           temperature: 0.8,
@@ -79,7 +79,7 @@ Keywords: ${product.keywords.join(", ")}`;
           data: {
             title: parsed.title,
             body: parsed.body,
-            method: "claude",
+            method: "groq",
           },
         });
       } catch (aiErr) {

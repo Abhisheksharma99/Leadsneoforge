@@ -93,7 +93,7 @@ export function TweetComposer({ open, onClose, isThread: initialThread = false }
       setThreadParts(result.data.threadParts || []);
       setMethod(result.data.method);
       if (result.data.method === "template") {
-        toast.info("Using template (add ANTHROPIC_API_KEY for AI tweets)");
+        toast.info("Using template (add GROQ_API_KEY for AI tweets)");
       } else {
         toast.success(isThread ? "Thread generated" : "Tweet generated");
       }

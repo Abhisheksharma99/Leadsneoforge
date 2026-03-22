@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { callClaude, isClaudeConfigured } from "@/lib/claude";
+import { callAI, isAIConfigured } from "@/lib/ai";
 
 interface GenerateSequenceRequest {
   platform: "linkedin" | "twitter" | "email" | "reddit";
@@ -59,13 +59,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!isClaudeConfigured()) {
+    if (!isAIConfigured()) {
       const fallback = generateTemplateSequence({ platform, goal, steps, productName });
       return NextResponse.json({
         data: {
           ...fallback,
           method: "template",
-          message: "Generated using templates (add ANTHROPIC_API_KEY for AI-powered sequences)",
+          message: "Generated using templates (add GROQ_API_KEY for AI-powered sequences)",
         },
       });
     }
@@ -80,7 +80,7 @@ Goal: ${goal}${productContext}${audienceContext}
 
 Generate the JSON now.`;
 
-    const result = await callClaude({
+    const result = await callAI({
       system: SYSTEM_PROMPT,
       prompt: userPrompt,
       maxTokens: 1024,
@@ -100,7 +100,7 @@ Generate the JSON now.`;
       data: {
         ...sequence,
         platform,
-        method: "claude",
+        method: "groq",
         tokens: result.inputTokens + result.outputTokens,
         message: "AI-generated outreach sequence",
       },

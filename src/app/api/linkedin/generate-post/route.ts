@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { callClaude, isClaudeConfigured } from "@/lib/claude";
+import { callAI, isAIConfigured } from "@/lib/ai";
 
 interface GenerateLinkedInPostRequest {
   postType: "text" | "article" | "carousel" | "poll";
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!isClaudeConfigured()) {
+    if (!isAIConfigured()) {
       const fallback = generateTemplatePost({ postType, topic, productName, productDescription, hashtags });
       return NextResponse.json({
         data: {
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
           hashtags,
           characterCount: fallback.length,
           method: "template",
-          message: "Generated using templates (add ANTHROPIC_API_KEY for AI-powered posts)",
+          message: "Generated using templates (add GROQ_API_KEY for AI-powered posts)",
         },
       });
     }
@@ -74,7 +74,7 @@ Tone: ${tone}${productContext}${hashtagStr}
 
 Generate the post now. Only output the post content.`;
 
-    const result = await callClaude({
+    const result = await callAI({
       system: SYSTEM_PROMPT,
       prompt: userPrompt,
       maxTokens: 1024,
@@ -89,7 +89,7 @@ Generate the post now. Only output the post content.`;
         postType,
         hashtags,
         characterCount: content.length,
-        method: "claude",
+        method: "groq",
         tokens: result.inputTokens + result.outputTokens,
         message: "AI-generated LinkedIn post",
       },

@@ -83,7 +83,7 @@ export function OutreachGenerator({ open, onClose, recipientName: initialName, r
       setGeneratedContent(result.data.content);
       setMethod(result.data.method);
       if (result.data.method === "template") {
-        toast.info("Using template (add ANTHROPIC_API_KEY for AI messages)");
+        toast.info("Using template (add GROQ_API_KEY for AI messages)");
       } else {
         toast.success("Outreach message generated");
       }

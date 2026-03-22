@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { callClaude, isClaudeConfigured } from "@/lib/claude";
+import { callAI, isAIConfigured } from "@/lib/ai";
 
 interface GenerateTweetRequest {
   topic: string;
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!isClaudeConfigured()) {
+    if (!isAIConfigured()) {
       const fallback = generateTemplateTweet({ topic, isThread, threadLength, hashtags, productName });
       const parts = isThread ? fallback.split("---").map(s => s.trim()) : [fallback];
       return NextResponse.json({
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
           hashtags,
           characterCount: isThread ? parts[0].length : fallback.length,
           method: "template",
-          message: "Generated using templates (add ANTHROPIC_API_KEY for Claude-powered tweets)",
+          message: "Generated using templates (add GROQ_API_KEY for AI-powered tweets)",
         },
       });
     }
@@ -88,7 +88,7 @@ Tone: ${tone}${productContext}${hashtagStr}
 
 Generate now. Only output the tweet(s).`;
 
-    const result = await callClaude({
+    const result = await callAI({
       system: SYSTEM_PROMPT,
       prompt: userPrompt,
       temperature: 0.8,
@@ -105,10 +105,10 @@ Generate now. Only output the tweet(s).`;
         threadParts: parts,
         hashtags,
         characterCount: parts[0]?.length || 0,
-        method: "claude",
+        method: "groq",
         model: result.model,
         tokens: result.inputTokens + result.outputTokens,
-        message: isThread ? "Claude-generated Twitter thread" : "Claude-generated tweet",
+        message: isThread ? "AI-generated Twitter thread" : "AI-generated tweet",
       },
     });
   } catch (error) {

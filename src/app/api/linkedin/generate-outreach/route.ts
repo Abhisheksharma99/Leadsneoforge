@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { callClaude, isClaudeConfigured } from "@/lib/claude";
+import { callAI, isAIConfigured } from "@/lib/ai";
 
 interface GenerateOutreachRequest {
   messageType: "connection_request" | "inmail" | "follow_up";
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!isClaudeConfigured()) {
+    if (!isAIConfigured()) {
       const fallback = generateTemplateOutreach({ messageType, recipientName, recipientTitle, recipientCompany, productName });
       return NextResponse.json({
         data: {
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
           messageType,
           characterCount: fallback.length,
           method: "template",
-          message: "Generated using templates (add ANTHROPIC_API_KEY for AI-powered messages)",
+          message: "Generated using templates (add GROQ_API_KEY for AI-powered messages)",
         },
       });
     }
@@ -89,7 +89,7 @@ Character limit: ${charLimit}
 
 Generate the message now. Only output the message text.`;
 
-    const result = await callClaude({
+    const result = await callAI({
       system: SYSTEM_PROMPT,
       prompt: userPrompt,
       maxTokens: 512,
@@ -103,7 +103,7 @@ Generate the message now. Only output the message text.`;
         content,
         messageType,
         characterCount: content.length,
-        method: "claude",
+        method: "groq",
         tokens: result.inputTokens + result.outputTokens,
         message: "AI-generated outreach message",
       },

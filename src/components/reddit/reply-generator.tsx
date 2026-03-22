@@ -115,7 +115,7 @@ export function ReplyGeneratorDialog({ post, open, onClose }: ReplyGeneratorProp
       setMethod(result.data.method);
 
       if (result.data.method === "template") {
-        toast.info("Using template (add ANTHROPIC_API_KEY for AI replies)");
+        toast.info("Using template (add GROQ_API_KEY for AI replies)");
       } else {
         toast.success(`Reply generated (${result.data.tokens} tokens)`);
       }

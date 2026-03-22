@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { callClaude, isClaudeConfigured } from "@/lib/claude";
+import { callAI, isAIConfigured } from "@/lib/ai";
 
 const SYSTEM_PROMPT = `You are an expert n8n workflow builder. Given a natural language description of an automation workflow, generate a valid n8n workflow JSON.
 
@@ -48,7 +48,7 @@ Do NOT include any text before or after the JSON. Only output the JSON object.`;
  * POST /api/workflows/generate
  *
  * Takes a natural language prompt and optionally previous messages
- * to generate an n8n workflow via Claude.
+ * to generate an n8n workflow via Groq.
  *
  * Body: { prompt: string, messages?: { role: string; content: string }[] }
  */
@@ -67,11 +67,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!isClaudeConfigured()) {
+    if (!isAIConfigured()) {
       return NextResponse.json(
         {
-          error: "Claude API key not configured",
-          details: "Add ANTHROPIC_API_KEY to your .env.local file",
+          error: "Groq API key not configured",
+          details: "Add GROQ_API_KEY to your .env.local file",
         },
         { status: 503 }
       );
@@ -90,8 +90,8 @@ export async function POST(request: NextRequest) {
     }
     fullPrompt += prompt;
 
-    // Call Claude API
-    const result = await callClaude({
+    // Call Groq API
+    const result = await callAI({
       system: SYSTEM_PROMPT,
       prompt: fullPrompt,
       temperature: 0.3,

@@ -1,12 +1,14 @@
 /**
- * Claude API client for dashboard API routes.
- * Uses Anthropic's Messages API directly via fetch (no SDK dependency).
+ * Groq Cloud API client for all dashboard AI routes.
+ * Uses OpenAI-compatible chat completions endpoint.
+ * Free tier available at console.groq.com — no credit card required.
  */
 
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
-const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
+const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
+const GROQ_BASE_URL = process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1";
+const DEFAULT_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
-export interface ClaudeResponse {
+export interface AIResponse {
   text: string;
   inputTokens: number;
   outputTokens: number;
@@ -14,15 +16,15 @@ export interface ClaudeResponse {
 }
 
 /**
- * Call Claude API with a system prompt and user message.
+ * Call Groq Cloud API with a system prompt and user message.
  */
-export async function callClaude(opts: {
+export async function callAI(opts: {
   system: string;
   prompt: string;
   model?: string;
   maxTokens?: number;
   temperature?: number;
-}): Promise<ClaudeResponse> {
+}): Promise<AIResponse> {
   const {
     system,
     prompt,
@@ -31,50 +33,51 @@ export async function callClaude(opts: {
     temperature = 0.7,
   } = opts;
 
-  if (!ANTHROPIC_API_KEY) {
-    throw new Error("ANTHROPIC_API_KEY not configured");
+  if (!GROQ_API_KEY) {
+    throw new Error("GROQ_API_KEY not configured");
   }
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const response = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
+      Authorization: `Bearer ${GROQ_API_KEY}`,
     },
     body: JSON.stringify({
       model,
       max_tokens: maxTokens,
       temperature,
-      system,
-      messages: [{ role: "user", content: prompt }],
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: prompt },
+      ],
     }),
   });
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`Claude API error ${response.status}: ${errText}`);
+    throw new Error(`Groq API error ${response.status}: ${errText}`);
   }
 
   const completion = (await response.json()) as {
-    content: Array<{ type: string; text: string }>;
-    usage?: { input_tokens: number; output_tokens: number };
+    choices: Array<{ message: { content: string } }>;
+    usage?: { prompt_tokens: number; completion_tokens: number };
     model: string;
   };
 
   return {
-    text: completion.content?.[0]?.text?.trim() || "",
-    inputTokens: completion.usage?.input_tokens || 0,
-    outputTokens: completion.usage?.output_tokens || 0,
+    text: completion.choices?.[0]?.message?.content?.trim() || "",
+    inputTokens: completion.usage?.prompt_tokens || 0,
+    outputTokens: completion.usage?.completion_tokens || 0,
     model: completion.model || model,
   };
 }
 
 /**
- * Check if Claude API is configured.
+ * Check if AI API is configured.
  */
-export function isClaudeConfigured(): boolean {
-  return !!ANTHROPIC_API_KEY;
+export function isAIConfigured(): boolean {
+  return !!GROQ_API_KEY;
 }
 
 /**

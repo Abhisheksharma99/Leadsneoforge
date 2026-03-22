@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
-const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
+import { callAI, isAIConfigured } from "@/lib/ai";
 
 interface GenerateReplyRequest {
   postTitle: string;
@@ -68,8 +66,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!ANTHROPIC_API_KEY) {
-      // Generate a template-based reply without AI
+    if (!isAIConfigured()) {
       const fallbackReply = generateTemplatereply({
         postTitle,
         postContent,
@@ -83,7 +80,7 @@ export async function POST(request: NextRequest) {
         data: {
           reply: fallbackReply,
           method: "template",
-          message: "Generated using templates (add ANTHROPIC_API_KEY for AI-powered replies)",
+          message: "Generated using templates (add GROQ_API_KEY for AI-powered replies)",
         },
       });
     }
@@ -117,46 +114,19 @@ ${productContext}
 
 Generate the reply now. Only output the reply text, nothing else.`;
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: ANTHROPIC_MODEL,
-        max_tokens: 1024,
-        temperature: 0.7,
-        system: SYSTEM_PROMPT,
-        messages: [
-          { role: "user", content: userPrompt },
-        ],
-      }),
+    const result = await callAI({
+      system: SYSTEM_PROMPT,
+      prompt: userPrompt,
+      temperature: 0.7,
     });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Anthropic API error ${response.status}: ${errText}`);
-    }
-
-    const completion = (await response.json()) as {
-      content: Array<{ type: string; text: string }>;
-      usage?: { input_tokens: number; output_tokens: number };
-    };
-
-    const reply = completion.content?.[0]?.text?.trim() || "";
-    const totalTokens = completion.usage
-      ? completion.usage.input_tokens + completion.usage.output_tokens
-      : undefined;
 
     return NextResponse.json({
       data: {
-        reply,
-        method: "claude",
-        model: ANTHROPIC_MODEL,
-        tokens: totalTokens,
-        message: "Claude-generated contextual reply",
+        reply: result.text,
+        method: "groq",
+        model: result.model,
+        tokens: result.inputTokens + result.outputTokens,
+        message: "AI-generated contextual reply",
       },
     });
   } catch (error) {
@@ -169,7 +139,7 @@ Generate the reply now. Only output the reply text, nothing else.`;
 }
 
 /**
- * Template-based reply generation (fallback when no OpenAI key)
+ * Template-based reply generation (fallback when no API key)
  */
 function generateTemplatereply(opts: {
   postTitle: string;
@@ -183,7 +153,6 @@ function generateTemplatereply(opts: {
   const { postTitle, subreddit, productName, productDescription, productUrl } = opts;
   const titleLower = postTitle.toLowerCase();
 
-  // Detect post intent
   const isQuestion = titleLower.includes("?") || titleLower.startsWith("how") || titleLower.startsWith("what") || titleLower.startsWith("which") || titleLower.startsWith("any");
   const isLookingFor = titleLower.includes("looking for") || titleLower.includes("alternative") || titleLower.includes("recommend") || titleLower.includes("suggestion");
   const isProblem = titleLower.includes("help") || titleLower.includes("issue") || titleLower.includes("problem") || titleLower.includes("struggling");
