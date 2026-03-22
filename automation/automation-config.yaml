@@ -1,0 +1,120 @@
+# =============================================================================
+# ForgeCadNeo Marketing Automation — Configuration
+# =============================================================================
+# All sensitive values are loaded from environment variables.
+# Set them in your shell profile or a .env file (never commit secrets).
+#
+# Required environment variables:
+#   REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USERNAME, REDDIT_PASSWORD
+#   ANTHROPIC_API_KEY
+#
+# Optional environment variables:
+#   LINKEDIN_ACCESS_TOKEN
+#   TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_SECRET
+
+reddit:
+  client_id: "${REDDIT_CLIENT_ID}"
+  client_secret: "${REDDIT_CLIENT_SECRET}"
+  username: "${REDDIT_USERNAME}"
+  password: "${REDDIT_PASSWORD}"
+  user_agent: "ForgeCadNeo Marketing Bot v1.0 (by /u/${REDDIT_USERNAME})"
+  max_posts_per_day: 5
+  max_replies_per_day: 10
+  min_reply_interval_minutes: 30
+  min_post_interval_minutes: 10
+  subreddits:
+    - cad
+    - mechanicalengineering
+    - 3Dprinting
+    - SolidWorks
+    - engineering
+    - Fusion360
+    - manufacturing
+    - AutoCAD
+    - microsaas
+    - SideProject
+    - startups
+    - Entrepreneur
+  keywords:
+    - "2d to 3d"
+    - "step file"
+    - "legacy drawings"
+    - "cad conversion"
+    - "engineering drawing"
+    - "convert drawing"
+    - "stl viewer"
+    - "step viewer"
+    - "openscad"
+    - "paper drawings to cad"
+    - "digitize drawings"
+    - "dxf to step"
+    - "scan to cad"
+    - "drawing conversion"
+    - "convert blueprint"
+
+anthropic:
+  api_key: "${ANTHROPIC_API_KEY}"
+  model: "claude-sonnet-4-6"
+  quality_model: "claude-opus-4-6"
+  max_tokens: 1024
+  temperature: 0.7
+
+linkedin:
+  access_token: "${LINKEDIN_ACCESS_TOKEN}"
+
+twitter:
+  api_key: "${TWITTER_API_KEY}"
+  api_secret: "${TWITTER_API_SECRET}"
+  access_token: "${TWITTER_ACCESS_TOKEN}"
+  access_secret: "${TWITTER_ACCESS_SECRET}"
+
+schedule:
+  daily_post_time: "09:00"
+  reddit_scan_interval_hours: 6
+  timezone: "America/New_York"
+
+product:
+  name: "ForgeCadNeo"
+  url: "https://forgecadneo.com"
+  viewer_url: "https://forgecadneo.com/viewer"
+  tagline: "AI-powered 2D to 3D CAD conversion"
+  description: >
+    ForgeCadNeo is an AI-powered platform that converts 2D engineering drawings
+    into manufacturing-grade 3D STEP files. Upload a 2D drawing (orthographic
+    projections, scanned blueprints, PDFs) and get a parametric 3D model in
+    minutes instead of hours. Six frontier AI models compete to produce the most
+    accurate reconstruction. Also supports text-to-3D generation.
+  features:
+    - "2D drawing to 3D STEP file conversion"
+    - "Six frontier AI models (GPT-5.2, Claude, Gemini) compete per drawing"
+    - "Text-to-3D: describe a part in English, get a parametric 3D model"
+    - "STEP AP214 export via pythonOCC for manufacturing-grade geometry"
+    - "Multi-part assembly detection with exploded view, BOM, instructions"
+    - "Free browser-based STEP/STL viewer with CAD editing tools at /viewer"
+    - "Parametric sliders for real-time dimension adjustment"
+    - "Chat-based model refinement with version history"
+    - "OpenSCAD code generation, compilable in-browser via WASM"
+  pricing:
+    free_tier: "3 credits, no credit card required"
+    pro_tier: "$29/month, 50 credits, 5 free refinements"
+    enterprise_tier: "Custom pricing, 200+ credits, unlimited refinements"
+
+logging:
+  file: "automation.log"
+  level: "INFO"
+  max_bytes: 10485760  # 10 MB
+  backup_count: 5
+
+paths:
+  state_dir: "."
+  reddit_posts_draft: "reddit-posts-draft.md"
+  reddit_profile_posts: "reddit-profile-posts.md"
+  reddit_saas_indie_posts: "reddit-saas-indie-posts.md"
+  content_calendar: "30-day-content-calendar.md"
+  content_queue: "content-queue.md"
+  linkedin_posts_draft: "linkedin-posts-draft.md"
+  scheduler_state: "scheduler-state.json"
+  post_log: "post-log.json"
+  reply_log: "reply-log.json"
+  seen_ids: ".reddit-seen-ids.json"
+  matches: "reddit-matches.json"
