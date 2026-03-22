@@ -12,9 +12,9 @@ AI-powered lead generation and marketing automation platform for ForgeCadNeo.
 - **Outreach Hub** — Lead tracking, multi-step outreach sequences, templates
 - **Growth Channels** — Product Hunt launch checklist, HN optimization, ASO
 - **Workflow Builder** — n8n integration for automation workflows
-- **Autonomous Agent** — Claude-powered daemon for automated marketing (Python)
+- **Autonomous Agent** — AI-powered daemon for automated marketing (Python)
 
-## Quick Start
+## Quick Start (Local Development)
 
 ```bash
 # 1. Install dependencies
@@ -22,7 +22,7 @@ npm install
 
 # 2. Set up environment
 cp .env.example .env.local
-# Edit .env.local with your credentials
+# Edit .env.local — add your GROQ_API_KEY from https://console.groq.com/keys
 
 # 3. Generate a password hash (default: admin123)
 npm run generate-hash -- your-password
@@ -41,50 +41,83 @@ See `.env.example` for the full list. Key variables:
 
 | Variable | Required | Description |
 |---|---|---|
-| `AUTH_SECRET` | Yes | NextAuth JWT secret (generate with `openssl rand -base64 32`) |
+| `AUTH_SECRET` | Yes | NextAuth JWT secret (`openssl rand -base64 32`) |
 | `ADMIN_EMAIL` | Yes | Login email |
 | `ADMIN_PASSWORD_HASH` | Yes | Bcrypt hash of password |
-| `ANTHROPIC_API_KEY` | For AI | Claude API key for content generation |
+| `GROQ_API_KEY` | For AI | Free at [console.groq.com](https://console.groq.com/keys) |
 | `REDDIT_CLIENT_ID` | For Reddit | Reddit app credentials |
 | `N8N_API_KEY` | For Workflows | n8n API key |
 
 ## Tech Stack
 
 - **Framework:** Next.js 16 + React 19 + TypeScript
-- **Auth:** NextAuth v5 (credentials provider)
+- **Auth:** NextAuth v5 (credentials provider, env-based)
 - **UI:** Tailwind CSS 4 + shadcn/ui + Radix UI + Framer Motion
-- **AI:** Anthropic Claude API (direct fetch, no SDK)
+- **AI:** Groq Cloud API (Llama 3.3 70B, free tier, OpenAI-compatible)
 - **State:** TanStack React Query v5
-- **Automation:** Python scripts (PRAW, Claude API)
+- **Automation:** Python scripts (PRAW, Groq API)
 
-## Deployment
+## Production Deployment
+
+Deployed via Docker + Nginx reverse proxy (same pattern as forgecadneo.neocodehub.com).
+
+### Prerequisites
+
+- Docker & Docker Compose on the server
+- Nginx with Certbot for SSL
+- DNS A record pointing `leads.neocodehub.com` to your server IP
+
+### Step-by-Step
 
 ```bash
-# Build for production
-npm run build
+# 1. Clone on server
+git clone https://github.com/Abhisheksharma99/Leadsneoforge.git
+cd Leadsneoforge
 
-# Start production server
-npm start
+# 2. Create production env
+cp .env.production.example .env.production
+nano .env.production
+# Fill in: AUTH_SECRET, ADMIN_PASSWORD_HASH, GROQ_API_KEY, etc.
+
+# 3. Deploy
+chmod +x deploy.sh
+./deploy.sh
+
+# 4. Set up Nginx + SSL (first time only)
+sudo cp deploy/nginx-site.conf /etc/nginx/sites-available/leadsneoforge
+sudo ln -s /etc/nginx/sites-available/leadsneoforge /etc/nginx/sites-enabled/
+sudo certbot --nginx -d leads.neocodehub.com
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
-### Vercel
+### Architecture
 
-1. Push to GitHub
-2. Import to Vercel
-3. Add environment variables in Vercel dashboard
-4. Deploy
+```
+Internet
+  └── Nginx (port 443, SSL via Let's Encrypt)
+        └── leads.neocodehub.com
+              └── proxy_pass http://127.0.0.1:3001
+                    └── Docker: leadsneoforge-app (Next.js standalone)
+                          └── /app/data (persistent volume)
+```
 
-### Docker (optional)
+### Useful Commands
 
-```dockerfile
-FROM node:20-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-COPY . .
-RUN npm run build
-EXPOSE 3001
-CMD ["npm", "start"]
+```bash
+# View logs
+docker compose -f docker-compose.prod.yml logs -f
+
+# Restart
+docker compose -f docker-compose.prod.yml restart
+
+# Rebuild & redeploy
+docker compose -f docker-compose.prod.yml up -d --build
+
+# Stop
+docker compose -f docker-compose.prod.yml down
+
+# Shell into container
+docker exec -it leadsneoforge-app sh
 ```
 
 ## Autonomous Agent (Python)
