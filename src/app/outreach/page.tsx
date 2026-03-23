@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import {
   Users,
   GitBranch,
@@ -20,7 +20,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -32,18 +31,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { LeadCard } from "@/components/outreach/lead-card";
 import { SequenceEditor } from "@/components/outreach/sequence-editor";
+import { useLeads, useAddLead, useUpdateLead } from "@/hooks/use-leads";
 import type { Lead, LeadStatus, LeadPlatform, OutreachStep, OutreachTemplate, OutreachTemplateCategory } from "@/types";
 
-// ─── Initial Data ───────────────────────────────────────────────────────────
-
-const INITIAL_LEADS: Lead[] = [
-  { id: "1", name: "Sarah Chen", title: "VP of Engineering", company: "TechCorp", platform: "linkedin", status: "new", score: 85, notes: "Active on LinkedIn, posts about automation weekly", addedAt: "2024-01-15" },
-  { id: "2", name: "James Miller", title: "Head of Growth", company: "ScaleUp", platform: "twitter", status: "contacted", score: 72, notes: "Engaged with our tweet about productivity", addedAt: "2024-01-14", lastContactedAt: "2024-01-16" },
-  { id: "3", name: "Emma Wilson", title: "CTO", company: "InnovateCo", platform: "linkedin", status: "replied", score: 90, notes: "Interested in demo, follow up next week", addedAt: "2024-01-10", lastContactedAt: "2024-01-17" },
-  { id: "4", name: "David Park", title: "Product Manager", company: "BuildFast", platform: "reddit", status: "qualified", score: 78, notes: "Found via r/SaaS, asked about pricing", addedAt: "2024-01-08" },
-  { id: "5", name: "Lisa Martinez", title: "Founder", company: "GrowthLabs", platform: "email", status: "new", score: 65, notes: "Signed up for newsletter", addedAt: "2024-01-18" },
-  { id: "6", name: "Alex Kumar", title: "Marketing Director", company: "LaunchPad", platform: "producthunt", status: "converted", score: 95, notes: "Became customer after PH launch", addedAt: "2024-01-01" },
-];
+// ─── Templates (starter templates, not fake data) ───────────────────────────
 
 const OUTREACH_TEMPLATES: OutreachTemplate[] = [
   { id: "1", name: "Cold LinkedIn Connect", category: "cold_outreach", platform: "linkedin", body: "Hi {name}, I noticed your work at {company} on {topic}. I'm building tools in the same space and would love to connect and share insights.", variables: ["name", "company", "topic"] },
@@ -60,11 +51,25 @@ const OUTREACH_TEMPLATES: OutreachTemplate[] = [
   { id: "12", name: "Integration Partnership", category: "partnership", platform: "email", subject: "{company} x [Your Company] integration", body: "Hi {name},\n\nOur users keep asking about a {company} integration. I think it would be mutually beneficial — your users get {benefit_to_them}, our users get {benefit_to_us}.\n\nWorth discussing?\n\nBest,\n[Your name]", variables: ["name", "company", "benefit_to_them", "benefit_to_us"] },
 ];
 
+// ─── Platform color map for analytics ────────────────────────────────────────
+
+const PLATFORM_COLORS: Record<string, string> = {
+  linkedin: "#0077b5",
+  email: "var(--color-forge-info)",
+  twitter: "#1d9bf0",
+  reddit: "#ff4500",
+  producthunt: "#da552f",
+  hackernews: "#ff6600",
+};
+
 // ─── Page ───────────────────────────────────────────────────────────────────
 
 export default function OutreachPage() {
-  // Lead Board state
-  const [leads, setLeads] = useState<Lead[]>(INITIAL_LEADS);
+  // Lead Board state — API-backed
+  const { data: leads = [], isLoading } = useLeads();
+  const addLeadMutation = useAddLead();
+  const updateLeadMutation = useUpdateLead();
+
   const [filterPlatform, setFilterPlatform] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [showAddLead, setShowAddLead] = useState(false);
@@ -82,27 +87,36 @@ export default function OutreachPage() {
   const [templatePlatform, setTemplatePlatform] = useState<string>("all");
 
   const updateLeadStatus = useCallback((id: string, status: LeadStatus) => {
-    setLeads((prev) => prev.map((l) => l.id === id ? { ...l, status } : l));
-    toast.success("Lead status updated");
-  }, []);
+    updateLeadMutation.mutate(
+      { id, status },
+      {
+        onSuccess: () => toast.success("Lead status updated"),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update lead"),
+      }
+    );
+  }, [updateLeadMutation]);
 
   const addLead = useCallback(() => {
     if (!newLead.name || !newLead.company) {
       toast.error("Name and company are required");
       return;
     }
-    const lead: Lead = {
-      id: crypto.randomUUID(),
-      ...newLead,
-      status: "new",
-      score: Math.floor(Math.random() * 30) + 60,
-      addedAt: new Date().toISOString().split("T")[0],
-    };
-    setLeads((prev) => [lead, ...prev]);
-    setNewLead({ name: "", title: "", company: "", platform: "linkedin", notes: "" });
-    setShowAddLead(false);
-    toast.success("Lead added");
-  }, [newLead]);
+    addLeadMutation.mutate(
+      {
+        ...newLead,
+        status: "new" as LeadStatus,
+        score: Math.floor(Math.random() * 30) + 60,
+      },
+      {
+        onSuccess: () => {
+          setNewLead({ name: "", title: "", company: "", platform: "linkedin", notes: "" });
+          setShowAddLead(false);
+          toast.success("Lead added");
+        },
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to add lead"),
+      }
+    );
+  }, [newLead, addLeadMutation]);
 
   const generateSequence = useCallback(async () => {
     if (!sequenceGoal) {
@@ -133,21 +147,21 @@ export default function OutreachPage() {
     setSequenceSteps((prev) => prev.map((s) => s.id === stepId ? { ...s, messageTemplate } : s));
   }, []);
 
-  // KPIs
-  const kpis = {
+  // KPIs — computed from actual lead data
+  const kpis = useMemo(() => ({
     total: leads.length,
     contacted: leads.filter((l) => l.status === "contacted").length,
     replied: leads.filter((l) => l.status === "replied").length,
     qualified: leads.filter((l) => l.status === "qualified").length,
     converted: leads.filter((l) => l.status === "converted").length,
-  };
+  }), [leads]);
 
   // Filtered leads
-  const filteredLeads = leads.filter((l) => {
+  const filteredLeads = useMemo(() => leads.filter((l) => {
     if (filterPlatform !== "all" && l.platform !== filterPlatform) return false;
     if (filterStatus !== "all" && l.status !== filterStatus) return false;
     return true;
-  });
+  }), [leads, filterPlatform, filterStatus]);
 
   // Filtered templates
   const filteredTemplates = OUTREACH_TEMPLATES.filter((t) => {
@@ -155,6 +169,58 @@ export default function OutreachPage() {
     if (templatePlatform !== "all" && t.platform !== templatePlatform) return false;
     return true;
   });
+
+  // ─── Analytics computed from actual leads ──────────────────────────────────
+
+  const analytics = useMemo(() => {
+    const total = leads.length;
+
+    // Funnel stages: each stage includes leads at that stage AND all later stages
+    // new -> contacted -> replied -> qualified -> converted
+    const convertedCount = leads.filter((l) => l.status === "converted").length;
+    const qualifiedCount = leads.filter((l) => l.status === "qualified").length + convertedCount;
+    const repliedCount = leads.filter((l) => l.status === "replied").length + qualifiedCount;
+    const contactedCount = leads.filter((l) => l.status === "contacted").length + repliedCount;
+
+    const funnel = [
+      { stage: "Total Leads", count: total, pct: 100, color: "var(--color-forge-text-primary)" },
+      { stage: "Contacted", count: contactedCount, pct: total > 0 ? Math.round((contactedCount / total) * 100) : 0, color: "var(--color-forge-warning)" },
+      { stage: "Replied", count: repliedCount, pct: total > 0 ? Math.round((repliedCount / total) * 100) : 0, color: "var(--color-forge-info)" },
+      { stage: "Qualified", count: qualifiedCount, pct: total > 0 ? Math.round((qualifiedCount / total) * 100) : 0, color: "var(--color-forge-secondary)" },
+      { stage: "Converted", count: convertedCount, pct: total > 0 ? Math.round((convertedCount / total) * 100) : 0, color: "var(--color-forge-success)" },
+    ];
+
+    // Platform breakdown
+    const platformCounts: Record<string, number> = {};
+    for (const lead of leads) {
+      platformCounts[lead.platform] = (platformCounts[lead.platform] || 0) + 1;
+    }
+    const platformBreakdown = Object.entries(platformCounts)
+      .sort(([, a], [, b]) => b - a)
+      .map(([platform, count]) => ({
+        platform: platform.charAt(0).toUpperCase() + platform.slice(1),
+        platformKey: platform,
+        count,
+        pct: total > 0 ? Math.round((count / total) * 100) : 0,
+        color: PLATFORM_COLORS[platform] || "var(--color-forge-text-muted)",
+      }));
+
+    // Response rates per platform — percentage of leads on each platform that have progressed past "new"
+    const platformResponseRates = Object.entries(platformCounts).map(([platform, count]) => {
+      const responded = leads.filter(
+        (l) => l.platform === platform && l.status !== "new" && l.status !== "contacted"
+      ).length;
+      const rate = count > 0 ? Math.round((responded / count) * 100) : 0;
+      return {
+        platform: platform.charAt(0).toUpperCase() + platform.slice(1),
+        rate: `${rate}%`,
+        responded,
+        total: count,
+      };
+    }).sort((a, b) => parseInt(b.rate) - parseInt(a.rate));
+
+    return { funnel, platformBreakdown, platformResponseRates };
+  }, [leads]);
 
   return (
     <div className="space-y-8">
@@ -262,18 +328,33 @@ export default function OutreachPage() {
                   </div>
                   <div className="flex gap-2">
                     <Input value={newLead.notes} onChange={(e) => setNewLead({ ...newLead, notes: e.target.value })} placeholder="Notes" className="h-8 text-xs flex-1 border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-elevated)] text-[var(--color-forge-text-primary)] placeholder:text-[var(--color-forge-text-muted)]" />
-                    <Button size="sm" onClick={addLead} className="h-8 bg-[var(--color-forge-accent)] text-[var(--color-forge-bg-root)]">Add</Button>
+                    <Button size="sm" onClick={addLead} disabled={addLeadMutation.isPending} className="h-8 bg-[var(--color-forge-accent)] text-[var(--color-forge-bg-root)]">
+                      {addLeadMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Add"}
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
             )}
 
-            {/* Lead Cards */}
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {filteredLeads.map((lead) => (
-                <LeadCard key={lead.id} lead={lead} onStatusChange={updateLeadStatus} />
-              ))}
-            </div>
+            {/* Loading state */}
+            {isLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="h-8 w-8 animate-spin text-[var(--color-forge-accent)]" />
+                <span className="ml-3 text-sm text-[var(--color-forge-text-muted)]">Loading leads...</span>
+              </div>
+            ) : filteredLeads.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <Users className="h-10 w-10 text-[var(--color-forge-text-muted)] mb-3" />
+                <p className="text-sm text-[var(--color-forge-text-muted)]">No leads found. Add your first lead to get started.</p>
+              </div>
+            ) : (
+              /* Lead Cards */
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                {filteredLeads.map((lead) => (
+                  <LeadCard key={lead.id} lead={lead} onStatusChange={updateLeadStatus} />
+                ))}
+              </div>
+            )}
           </div>
         </TabsContent>
 
@@ -425,119 +506,107 @@ export default function OutreachPage() {
         <TabsContent value="analytics">
           <div className="space-y-4">
             <p className="text-sm text-[var(--color-forge-text-secondary)]">
-              Simulated outreach analytics. Connect your CRM to see real data.
+              Analytics are computed from your actual lead data.
             </p>
 
-            {/* Funnel */}
-            <Card className="border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-card)]">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-[var(--color-forge-text-primary)]">Outreach Funnel</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {[
-                  { stage: "Sent", count: 150, pct: 100, color: "var(--color-forge-text-primary)" },
-                  { stage: "Opened", count: 98, pct: 65, color: "var(--color-forge-info)" },
-                  { stage: "Replied", count: 34, pct: 23, color: "var(--color-forge-warning)" },
-                  { stage: "Meeting Booked", count: 12, pct: 8, color: "var(--color-forge-secondary)" },
-                  { stage: "Converted", count: 5, pct: 3.3, color: "var(--color-forge-success)" },
-                ].map((stage) => (
-                  <div key={stage.stage} className="flex items-center gap-3">
-                    <div className="w-28 text-xs text-[var(--color-forge-text-secondary)]">{stage.stage}</div>
-                    <div className="flex-1">
-                      <div className="h-6 rounded bg-[var(--color-forge-bg-elevated)]">
-                        <div className="h-full rounded flex items-center px-2" style={{ width: `${stage.pct}%`, backgroundColor: stage.color, opacity: 0.2 }}>
-                          <span className="text-[10px] font-medium" style={{ color: stage.color }}>{stage.count}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <span className="w-12 text-xs text-right text-[var(--color-forge-text-muted)]">{stage.pct}%</span>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            {/* Platform Breakdown */}
-            <div className="grid grid-cols-2 gap-4">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="h-8 w-8 animate-spin text-[var(--color-forge-accent)]" />
+                <span className="ml-3 text-sm text-[var(--color-forge-text-muted)]">Loading analytics...</span>
+              </div>
+            ) : leads.length === 0 ? (
               <Card className="border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-card)]">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-[var(--color-forge-text-primary)]">Platform Breakdown</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {[
-                    { platform: "LinkedIn", count: 45, pct: 38, color: "#0077b5" },
-                    { platform: "Email", count: 35, pct: 29, color: "var(--color-forge-info)" },
-                    { platform: "Twitter", count: 22, pct: 18, color: "#1d9bf0" },
-                    { platform: "Reddit", count: 18, pct: 15, color: "#ff4500" },
-                  ].map((p) => (
-                    <div key={p.platform} className="flex items-center gap-3">
-                      <div className="w-16 text-xs text-[var(--color-forge-text-secondary)]">{p.platform}</div>
-                      <div className="flex-1">
-                        <div className="h-3 rounded-full bg-[var(--color-forge-bg-elevated)]">
-                          <div className="h-full rounded-full" style={{ width: `${p.pct}%`, backgroundColor: p.color }} />
-                        </div>
-                      </div>
-                      <span className="text-xs text-[var(--color-forge-text-muted)]">{p.count} ({p.pct}%)</span>
-                    </div>
-                  ))}
+                <CardContent className="p-8 text-center">
+                  <BarChart3 className="h-10 w-10 text-[var(--color-forge-text-muted)] mx-auto mb-3" />
+                  <p className="text-sm text-[var(--color-forge-text-muted)]">No lead data yet. Add leads to see analytics here.</p>
                 </CardContent>
               </Card>
-
-              <Card className="border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-card)]">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-[var(--color-forge-text-primary)]">Response Rates</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {[
-                    { platform: "LinkedIn", rate: "28%", benchmark: "20-30%" },
-                    { platform: "Email", rate: "18%", benchmark: "15-25%" },
-                    { platform: "Twitter", rate: "12%", benchmark: "5-15%" },
-                    { platform: "Reddit", rate: "8%", benchmark: "3-10%" },
-                  ].map((p) => (
-                    <div key={p.platform} className="flex items-center justify-between rounded border border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-elevated)] px-3 py-2">
-                      <span className="text-xs text-[var(--color-forge-text-primary)]">{p.platform}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-[var(--color-forge-accent)]">{p.rate}</span>
-                        <span className="text-[10px] text-[var(--color-forge-text-muted)]">benchmark: {p.benchmark}</span>
+            ) : (
+              <>
+                {/* Funnel */}
+                <Card className="border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-card)]">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-[var(--color-forge-text-primary)]">Outreach Funnel</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {analytics.funnel.map((stage) => (
+                      <div key={stage.stage} className="flex items-center gap-3">
+                        <div className="w-28 text-xs text-[var(--color-forge-text-secondary)]">{stage.stage}</div>
+                        <div className="flex-1">
+                          <div className="h-6 rounded bg-[var(--color-forge-bg-elevated)]">
+                            <div className="h-full rounded flex items-center px-2" style={{ width: `${Math.max(stage.pct, 2)}%`, backgroundColor: stage.color, opacity: 0.2 }}>
+                              <span className="text-[10px] font-medium" style={{ color: stage.color }}>{stage.count}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <span className="w-12 text-xs text-right text-[var(--color-forge-text-muted)]">{stage.pct}%</span>
                       </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Best Templates */}
-            <Card className="border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-card)]">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-[var(--color-forge-text-primary)]">Best Performing Templates</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-[var(--color-forge-border-default)]">
-                      <th className="pb-2 text-left text-[var(--color-forge-text-muted)] font-medium">Template</th>
-                      <th className="pb-2 text-center text-[var(--color-forge-text-muted)] font-medium">Sent</th>
-                      <th className="pb-2 text-center text-[var(--color-forge-text-muted)] font-medium">Response</th>
-                      <th className="pb-2 text-center text-[var(--color-forge-text-muted)] font-medium">Conversion</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      { name: "Content Engagement", sent: 45, response: "32%", conversion: "8%" },
-                      { name: "Mutual Connection Intro", sent: 38, response: "28%", conversion: "6%" },
-                      { name: "Cold Email", sent: 55, response: "18%", conversion: "4%" },
-                      { name: "Partnership Proposal", sent: 12, response: "42%", conversion: "12%" },
-                    ].map((t) => (
-                      <tr key={t.name} className="border-b border-[var(--color-forge-border-default)]">
-                        <td className="py-2 text-[var(--color-forge-text-primary)]">{t.name}</td>
-                        <td className="py-2 text-center text-[var(--color-forge-text-muted)]">{t.sent}</td>
-                        <td className="py-2 text-center text-[var(--color-forge-accent)]">{t.response}</td>
-                        <td className="py-2 text-center text-[var(--color-forge-success)]">{t.conversion}</td>
-                      </tr>
                     ))}
-                  </tbody>
-                </table>
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
+
+                {/* Platform Breakdown + Response Rates */}
+                <div className="grid grid-cols-2 gap-4">
+                  <Card className="border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-card)]">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm text-[var(--color-forge-text-primary)]">Platform Breakdown</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {analytics.platformBreakdown.length > 0 ? (
+                        analytics.platformBreakdown.map((p) => (
+                          <div key={p.platformKey} className="flex items-center gap-3">
+                            <div className="w-24 text-xs text-[var(--color-forge-text-secondary)]">{p.platform}</div>
+                            <div className="flex-1">
+                              <div className="h-3 rounded-full bg-[var(--color-forge-bg-elevated)]">
+                                <div className="h-full rounded-full" style={{ width: `${Math.max(p.pct, 3)}%`, backgroundColor: p.color }} />
+                              </div>
+                            </div>
+                            <span className="text-xs text-[var(--color-forge-text-muted)]">{p.count} ({p.pct}%)</span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-xs text-[var(--color-forge-text-muted)]">No platform data yet.</p>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-card)]">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm text-[var(--color-forge-text-primary)]">Response Rates by Platform</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {analytics.platformResponseRates.length > 0 ? (
+                        analytics.platformResponseRates.map((p) => (
+                          <div key={p.platform} className="flex items-center justify-between rounded border border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-elevated)] px-3 py-2">
+                            <span className="text-xs text-[var(--color-forge-text-primary)]">{p.platform}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-[var(--color-forge-accent)]">{p.rate}</span>
+                              <span className="text-[10px] text-[var(--color-forge-text-muted)]">{p.responded}/{p.total} responded</span>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-xs text-[var(--color-forge-text-muted)]">No response data yet.</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Best Templates — placeholder for CRM integration */}
+                <Card className="border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-card)]">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-[var(--color-forge-text-primary)]">Best Performing Templates</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <FileText className="h-8 w-8 text-[var(--color-forge-text-muted)] mb-2" />
+                      <p className="text-sm text-[var(--color-forge-text-muted)]">Connect your CRM for template analytics</p>
+                      <p className="text-xs text-[var(--color-forge-text-muted)] mt-1">Track which templates drive the highest response and conversion rates.</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </div>
         </TabsContent>
       </Tabs>

@@ -16,6 +16,9 @@ import {
   Users,
   Building2,
   Briefcase,
+  Trash2,
+  Info,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -26,8 +29,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { LinkedInPostComposer } from "@/components/linkedin/post-composer";
 import { OutreachGenerator } from "@/components/linkedin/outreach-generator";
+import { useLeads, useAddLead, useDeleteLead } from "@/hooks/use-leads";
 
-// ─── Static Data ────────────────────────────────────────────────────────────
+// ─── Static Data (Industry Benchmarks) ─────────────────────────────────────
 
 const BEST_POSTING_TIMES = [
   { day: "Tuesday", time: "8:00 AM", engagement: 95 },
@@ -75,37 +79,66 @@ export default function LinkedInPage() {
   const [outreachOpen, setOutreachOpen] = useState(false);
   const [outreachTarget, setOutreachTarget] = useState<{ name: string; title: string; company: string } | null>(null);
 
-  // Lead Finder state
-  const [searchTitle, setSearchTitle] = useState("");
-  const [searchCompany, setSearchCompany] = useState("");
-  const [searchIndustry, setSearchIndustry] = useState("");
-  const [leads, setLeads] = useState<Array<{ id: string; name: string; title: string; company: string; industry: string; score: number }>>([]);
+  // Lead Finder state — manual entry form fields
+  const [addName, setAddName] = useState("");
+  const [addTitle, setAddTitle] = useState("");
+  const [addCompany, setAddCompany] = useState("");
+  const [addIndustry, setAddIndustry] = useState("");
+  const [showAddForm, setShowAddForm] = useState(false);
 
-  const searchLeads = useCallback(() => {
-    if (!searchTitle && !searchCompany && !searchIndustry) {
-      toast.error("Enter at least one search criteria");
+  // Leads from API
+  const { data: leads = [], isLoading: leadsLoading } = useLeads();
+  const addLeadMutation = useAddLead();
+  const deleteLeadMutation = useDeleteLead();
+
+  // Filter to LinkedIn leads only
+  const linkedInLeads = leads.filter((l) => l.platform === "linkedin");
+
+  const handleAddLead = useCallback(() => {
+    if (!addName.trim()) {
+      toast.error("Name is required");
       return;
     }
-    // Generate template lead profiles from inputs
-    const templates = [
-      { first: "Alex", last: "Chen" },
-      { first: "Sarah", last: "Johnson" },
-      { first: "Michael", last: "Park" },
-      { first: "Emma", last: "Williams" },
-      { first: "David", last: "Kumar" },
-      { first: "Lisa", last: "Martinez" },
-    ];
-    const generated = templates.map((t, i) => ({
-      id: crypto.randomUUID(),
-      name: `${t.first} ${t.last}`,
-      title: searchTitle || ["VP of Engineering", "Head of Product", "CTO", "Director of Marketing", "Founder", "Growth Lead"][i],
-      company: searchCompany || ["TechCorp", "InnovateCo", "StartupXYZ", "GrowthLabs", "ScaleUp Inc", "BuildFast"][i],
-      industry: searchIndustry || "Technology",
-      score: Math.floor(Math.random() * 40) + 60,
-    }));
-    setLeads(generated);
-    toast.success(`Found ${generated.length} potential leads`);
-  }, [searchTitle, searchCompany, searchIndustry]);
+    if (!addTitle.trim()) {
+      toast.error("Job title is required");
+      return;
+    }
+
+    addLeadMutation.mutate(
+      {
+        name: addName.trim(),
+        title: addTitle.trim(),
+        company: addCompany.trim(),
+        platform: "linkedin",
+        status: "new",
+        score: 0,
+        notes: addIndustry.trim() ? `Industry: ${addIndustry.trim()}` : "",
+      },
+      {
+        onSuccess: () => {
+          toast.success(`Lead "${addName.trim()}" added`);
+          setAddName("");
+          setAddTitle("");
+          setAddCompany("");
+          setAddIndustry("");
+          setShowAddForm(false);
+        },
+        onError: (err) => {
+          toast.error(err.message || "Failed to add lead");
+        },
+      }
+    );
+  }, [addName, addTitle, addCompany, addIndustry, addLeadMutation]);
+
+  const handleDeleteLead = useCallback(
+    (id: string, name: string) => {
+      deleteLeadMutation.mutate(id, {
+        onSuccess: () => toast.success(`Removed "${name}"`),
+        onError: (err) => toast.error(err.message || "Failed to remove lead"),
+      });
+    },
+    [deleteLeadMutation]
+  );
 
   const openOutreachForLead = useCallback((lead: { name: string; title: string; company: string }) => {
     setOutreachTarget(lead);
@@ -178,65 +211,170 @@ export default function LinkedInPage() {
         {/* Lead Finder Tab */}
         <TabsContent value="leads">
           <div className="space-y-4">
-            <p className="text-sm text-[var(--color-forge-text-secondary)]">
-              Search for potential leads by job title, company, or industry. Generate targeted outreach for each lead.
-            </p>
-            <Card className="border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-card)]">
-              <CardContent className="p-4 space-y-3">
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-[var(--color-forge-text-muted)] flex items-center gap-1">
-                      <Briefcase className="h-3 w-3" /> Job Title
-                    </Label>
-                    <Input value={searchTitle} onChange={(e) => setSearchTitle(e.target.value)} placeholder="e.g., VP of Engineering" className="h-8 text-xs border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-elevated)] text-[var(--color-forge-text-primary)] placeholder:text-[var(--color-forge-text-muted)]" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-[var(--color-forge-text-muted)] flex items-center gap-1">
-                      <Building2 className="h-3 w-3" /> Company
-                    </Label>
-                    <Input value={searchCompany} onChange={(e) => setSearchCompany(e.target.value)} placeholder="e.g., Stripe" className="h-8 text-xs border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-elevated)] text-[var(--color-forge-text-primary)] placeholder:text-[var(--color-forge-text-muted)]" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-[var(--color-forge-text-muted)] flex items-center gap-1">
-                      <Users className="h-3 w-3" /> Industry
-                    </Label>
-                    <Input value={searchIndustry} onChange={(e) => setSearchIndustry(e.target.value)} placeholder="e.g., SaaS" className="h-8 text-xs border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-elevated)] text-[var(--color-forge-text-primary)] placeholder:text-[var(--color-forge-text-muted)]" />
-                  </div>
-                </div>
-                <Button onClick={searchLeads} className="bg-[var(--color-forge-accent)] text-[var(--color-forge-bg-root)] hover:bg-[var(--color-forge-accent-hover)]">
-                  <Search className="mr-2 h-4 w-4" />
-                  Find Leads
-                </Button>
-              </CardContent>
-            </Card>
+            {/* Info banner */}
+            <div className="flex items-start gap-2 rounded-lg border border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-elevated)] px-4 py-3">
+              <Info className="h-4 w-4 mt-0.5 shrink-0 text-[var(--color-forge-info)]" />
+              <div>
+                <p className="text-sm text-[var(--color-forge-text-secondary)]">
+                  LinkedIn API integration coming soon. Add leads manually below to track and manage your LinkedIn outreach targets.
+                </p>
+              </div>
+            </div>
 
-            {leads.length > 0 && (
+            {/* Add Lead Button / Form */}
+            {!showAddForm ? (
+              <Button
+                onClick={() => setShowAddForm(true)}
+                className="bg-[var(--color-forge-accent)] text-[var(--color-forge-bg-root)] hover:bg-[var(--color-forge-accent-hover)]"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Lead
+              </Button>
+            ) : (
+              <Card className="border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-card)]">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-[var(--color-forge-text-primary)]">Add New Lead</CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-[var(--color-forge-text-muted)] flex items-center gap-1">
+                        <Users className="h-3 w-3" /> Name *
+                      </Label>
+                      <Input
+                        value={addName}
+                        onChange={(e) => setAddName(e.target.value)}
+                        placeholder="e.g., Jane Smith"
+                        className="h-8 text-xs border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-elevated)] text-[var(--color-forge-text-primary)] placeholder:text-[var(--color-forge-text-muted)]"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-[var(--color-forge-text-muted)] flex items-center gap-1">
+                        <Briefcase className="h-3 w-3" /> Job Title *
+                      </Label>
+                      <Input
+                        value={addTitle}
+                        onChange={(e) => setAddTitle(e.target.value)}
+                        placeholder="e.g., VP of Engineering"
+                        className="h-8 text-xs border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-elevated)] text-[var(--color-forge-text-primary)] placeholder:text-[var(--color-forge-text-muted)]"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-[var(--color-forge-text-muted)] flex items-center gap-1">
+                        <Building2 className="h-3 w-3" /> Company
+                      </Label>
+                      <Input
+                        value={addCompany}
+                        onChange={(e) => setAddCompany(e.target.value)}
+                        placeholder="e.g., Stripe"
+                        className="h-8 text-xs border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-elevated)] text-[var(--color-forge-text-primary)] placeholder:text-[var(--color-forge-text-muted)]"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-[var(--color-forge-text-muted)] flex items-center gap-1">
+                        <TrendingUp className="h-3 w-3" /> Industry
+                      </Label>
+                      <Input
+                        value={addIndustry}
+                        onChange={(e) => setAddIndustry(e.target.value)}
+                        placeholder="e.g., SaaS, FinTech"
+                        className="h-8 text-xs border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-elevated)] text-[var(--color-forge-text-primary)] placeholder:text-[var(--color-forge-text-muted)]"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={handleAddLead}
+                      disabled={addLeadMutation.isPending}
+                      className="bg-[var(--color-forge-accent)] text-[var(--color-forge-bg-root)] hover:bg-[var(--color-forge-accent-hover)]"
+                    >
+                      {addLeadMutation.isPending ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Plus className="mr-2 h-4 w-4" />
+                      )}
+                      Save Lead
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setShowAddForm(false);
+                        setAddName("");
+                        setAddTitle("");
+                        setAddCompany("");
+                        setAddIndustry("");
+                      }}
+                      className="border-[var(--color-forge-border-default)] text-[var(--color-forge-text-secondary)]"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Leads List */}
+            {leadsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-[var(--color-forge-accent)]" />
+                <span className="ml-2 text-sm text-[var(--color-forge-text-muted)]">Loading leads...</span>
+              </div>
+            ) : linkedInLeads.length > 0 ? (
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {leads.map((lead) => (
+                {linkedInLeads.map((lead) => (
                   <Card key={lead.id} className="border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-card)]">
                     <CardContent className="p-4 space-y-2">
                       <div className="flex items-start justify-between">
                         <div>
                           <p className="text-sm font-medium text-[var(--color-forge-text-primary)]">{lead.name}</p>
                           <p className="text-xs text-[var(--color-forge-text-muted)]">{lead.title}</p>
-                          <p className="text-xs text-[var(--color-forge-text-muted)]">{lead.company} · {lead.industry}</p>
+                          <p className="text-xs text-[var(--color-forge-text-muted)]">
+                            {lead.company}
+                            {lead.notes ? ` · ${lead.notes.replace(/^Industry:\s*/i, "")}` : ""}
+                          </p>
                         </div>
-                        <Badge className="bg-[rgba(129,140,248,0.15)] text-[var(--color-forge-info)] text-[10px]">
-                          Score: {lead.score}
+                        <Badge
+                          className={
+                            lead.status === "new"
+                              ? "bg-[rgba(129,140,248,0.15)] text-[var(--color-forge-info)] text-[10px]"
+                              : lead.status === "contacted"
+                              ? "bg-[rgba(250,204,21,0.15)] text-[var(--color-forge-warning)] text-[10px]"
+                              : lead.status === "replied"
+                              ? "bg-[rgba(52,211,153,0.15)] text-[var(--color-forge-success)] text-[10px]"
+                              : "bg-[rgba(129,140,248,0.15)] text-[var(--color-forge-info)] text-[10px]"
+                          }
+                        >
+                          {lead.status}
                         </Badge>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openOutreachForLead(lead)}
-                        className="w-full h-7 text-xs border-[var(--color-forge-accent)] text-[var(--color-forge-accent)]"
-                      >
-                        <UserPlus className="h-3 w-3 mr-1" />
-                        Add to Outreach
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openOutreachForLead(lead)}
+                          className="flex-1 h-7 text-xs border-[var(--color-forge-accent)] text-[var(--color-forge-accent)]"
+                        >
+                          <UserPlus className="h-3 w-3 mr-1" />
+                          Outreach
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteLead(lead.id, lead.name)}
+                          disabled={deleteLeadMutation.isPending}
+                          className="h-7 px-2 text-xs border-[var(--color-forge-border-default)] text-[var(--color-forge-text-muted)] hover:text-red-400 hover:border-red-400"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 text-sm text-[var(--color-forge-text-muted)]">
+                <Users className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                <p>No LinkedIn leads yet. Click &ldquo;Add Lead&rdquo; to get started.</p>
               </div>
             )}
           </div>
@@ -306,12 +444,20 @@ export default function LinkedInPage() {
         {/* Performance Tips Tab */}
         <TabsContent value="tips">
           <div className="space-y-6">
+            {/* Industry benchmark note */}
+            <div className="flex items-start gap-2 rounded-lg border border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-elevated)] px-4 py-3">
+              <Info className="h-4 w-4 mt-0.5 shrink-0 text-[var(--color-forge-info)]" />
+              <p className="text-xs text-[var(--color-forge-text-muted)]">
+                Based on LinkedIn industry research and best practices. These are general benchmarks, not personalized analytics.
+              </p>
+            </div>
+
             {/* Best Posting Times */}
             <Card className="border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-card)]">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-[var(--color-forge-text-primary)] flex items-center gap-2">
                   <Clock className="h-4 w-4 text-[var(--color-forge-accent)]" />
-                  Best Posting Times
+                  Recommended Posting Times (Industry Average)
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -383,7 +529,7 @@ export default function LinkedInPage() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-[var(--color-forge-text-primary)] flex items-center gap-2">
                   <BarChart3 className="h-4 w-4 text-[var(--color-forge-accent)]" />
-                  Engagement Benchmarks
+                  Industry Engagement Benchmarks
                 </CardTitle>
               </CardHeader>
               <CardContent>

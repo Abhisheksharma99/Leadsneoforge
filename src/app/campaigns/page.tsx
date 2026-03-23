@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   Megaphone,
   Plus,
@@ -37,38 +37,18 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type CampaignStatus = "draft" | "active" | "paused" | "completed";
-type ChannelType = "reddit" | "twitter" | "linkedin" | "email" | "blog" | "seo";
-
-interface Campaign {
-  id: string;
-  name: string;
-  description: string;
-  status: CampaignStatus;
-  channels: ChannelType[];
-  startDate: string;
-  endDate?: string;
-  budget?: string;
-  kpis: {
-    impressions: number;
-    clicks: number;
-    conversions: number;
-    engagement: number;
-  };
-  tasks: CampaignTask[];
-  createdAt: string;
-}
-
-interface CampaignTask {
-  id: string;
-  title: string;
-  channel: ChannelType;
-  status: "pending" | "in_progress" | "done";
-  dueDate?: string;
-}
+import {
+  useCampaigns,
+  useCreateCampaign,
+  useUpdateCampaign,
+  useDeleteCampaign,
+} from "@/hooks/use-campaigns";
+import type {
+  Campaign,
+  CampaignStatus,
+  CampaignTask,
+  ChannelType,
+} from "@/types";
 
 // ─── Channel config ───────────────────────────────────────────────────────────
 
@@ -152,9 +132,26 @@ const CAMPAIGN_TEMPLATES = [
 // ─── Page Component ───────────────────────────────────────────────────────────
 
 export default function CampaignsPage() {
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const { data: campaigns = [], isLoading } = useCampaigns();
+  const createMutation = useCreateCampaign();
+  const updateMutation = useUpdateCampaign();
+  const deleteMutation = useDeleteCampaign();
+
   const [showCreate, setShowCreate] = useState(false);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
+
+  // Keep selectedCampaign in sync with latest query data
+  useEffect(() => {
+    if (selectedCampaign) {
+      const updated = campaigns.find((c) => c.id === selectedCampaign.id);
+      if (updated) {
+        setSelectedCampaign(updated);
+      } else {
+        // Campaign was deleted or no longer exists
+        setSelectedCampaign(null);
+      }
+    }
+  }, [campaigns]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // New campaign form state
   const [newName, setNewName] = useState("");
@@ -165,8 +162,7 @@ export default function CampaignsPage() {
 
   const createCampaign = useCallback(
     (template?: (typeof CAMPAIGN_TEMPLATES)[0]) => {
-      const campaign: Campaign = {
-        id: crypto.randomUUID(),
+      const payload: Omit<Campaign, "id" | "createdAt"> = {
         name: template?.name || newName || "New Campaign",
         description: template?.description || newDescription || "",
         status: "draft",
@@ -180,53 +176,85 @@ export default function CampaignsPage() {
           channel: t.channel,
           status: "pending" as const,
         })),
-        createdAt: new Date().toISOString(),
       };
 
-      setCampaigns((prev) => [campaign, ...prev]);
-      setShowCreate(false);
-      setNewName("");
-      setNewDescription("");
-      setNewChannels([]);
-      setNewStartDate("");
-      setNewBudget("");
-      toast.success(`Campaign "${campaign.name}" created`);
+      createMutation.mutate(payload, {
+        onSuccess: (created) => {
+          setShowCreate(false);
+          setNewName("");
+          setNewDescription("");
+          setNewChannels([]);
+          setNewStartDate("");
+          setNewBudget("");
+          toast.success(`Campaign "${created.name}" created`);
+        },
+        onError: (error) => {
+          toast.error(`Failed to create campaign: ${error.message}`);
+        },
+      });
     },
-    [newName, newDescription, newChannels, newStartDate, newBudget]
+    [newName, newDescription, newChannels, newStartDate, newBudget, createMutation]
   );
 
   const updateCampaignStatus = useCallback(
     (id: string, status: CampaignStatus) => {
-      setCampaigns((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, status } : c))
+      updateMutation.mutate(
+        { id, status },
+        {
+          onError: (error) => {
+            toast.error(`Failed to update status: ${error.message}`);
+          },
+        }
       );
     },
-    []
+    [updateMutation]
   );
 
   const updateTaskStatus = useCallback(
     (campaignId: string, taskId: string, status: CampaignTask["status"]) => {
-      setCampaigns((prev) =>
-        prev.map((c) =>
-          c.id === campaignId
-            ? {
-                ...c,
-                tasks: c.tasks.map((t) =>
-                  t.id === taskId ? { ...t, status } : t
-                ),
-              }
-            : c
-        )
+      const campaign = campaigns.find((c) => c.id === campaignId);
+      if (!campaign) return;
+
+      const updatedTasks = campaign.tasks.map((t) =>
+        t.id === taskId ? { ...t, status } : t
+      );
+
+      updateMutation.mutate(
+        { id: campaignId, tasks: updatedTasks },
+        {
+          onError: (error) => {
+            toast.error(`Failed to update task: ${error.message}`);
+          },
+        }
       );
     },
-    []
+    [campaigns, updateMutation]
   );
 
-  const deleteCampaign = useCallback((id: string) => {
-    setCampaigns((prev) => prev.filter((c) => c.id !== id));
-    setSelectedCampaign(null);
-    toast.success("Campaign deleted");
-  }, []);
+  const deleteCampaign = useCallback(
+    (id: string) => {
+      deleteMutation.mutate(id, {
+        onSuccess: () => {
+          setSelectedCampaign(null);
+          toast.success("Campaign deleted");
+        },
+        onError: (error) => {
+          toast.error(`Failed to delete campaign: ${error.message}`);
+        },
+      });
+    },
+    [deleteMutation]
+  );
+
+  // ─── Loading State ──────────────────────────────────────────────────────────
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="h-8 w-8 animate-spin text-[var(--color-forge-accent)]" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -271,7 +299,8 @@ export default function CampaignsPage() {
                   <button
                     key={t.name}
                     onClick={() => createCampaign(t)}
-                    className="rounded-lg border border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-elevated)] p-3 text-left transition-colors hover:border-[var(--color-forge-accent)] hover:bg-[var(--color-forge-accent-muted)]"
+                    disabled={createMutation.isPending}
+                    className="rounded-lg border border-[var(--color-forge-border-default)] bg-[var(--color-forge-bg-elevated)] p-3 text-left transition-colors hover:border-[var(--color-forge-accent)] hover:bg-[var(--color-forge-accent-muted)] disabled:opacity-50"
                   >
                     <p className="text-sm font-medium text-[var(--color-forge-text-primary)]">
                       {t.name}
@@ -353,10 +382,14 @@ export default function CampaignsPage() {
             </div>
             <Button
               onClick={() => createCampaign()}
-              disabled={!newName.trim()}
+              disabled={!newName.trim() || createMutation.isPending}
               className="bg-[var(--color-forge-accent)] text-[var(--color-forge-bg-root)]"
             >
-              <Plus className="h-4 w-4 mr-2" />
+              {createMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4 mr-2" />
+              )}
               Create Custom Campaign
             </Button>
           </CardContent>
@@ -465,7 +498,6 @@ export default function CampaignsPage() {
                         value={selectedCampaign.status}
                         onValueChange={(v) => {
                           updateCampaignStatus(selectedCampaign.id, v as CampaignStatus);
-                          setSelectedCampaign({ ...selectedCampaign, status: v as CampaignStatus });
                         }}
                       >
                         <SelectTrigger className="w-[120px] h-8 text-xs">
@@ -482,9 +514,14 @@ export default function CampaignsPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => deleteCampaign(selectedCampaign.id)}
+                        disabled={deleteMutation.isPending}
                         className="h-8 text-[var(--color-forge-error)]"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        {deleteMutation.isPending ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5" />
+                        )}
                       </Button>
                     </div>
                   </div>
@@ -528,12 +565,6 @@ export default function CampaignsPage() {
                           onCheckedChange={(checked) => {
                             const newStatus = checked ? "done" : "pending";
                             updateTaskStatus(selectedCampaign.id, task.id, newStatus);
-                            setSelectedCampaign({
-                              ...selectedCampaign,
-                              tasks: selectedCampaign.tasks.map((t) =>
-                                t.id === task.id ? { ...t, status: newStatus } : t
-                              ),
-                            });
                           }}
                         />
                         <span

@@ -85,6 +85,47 @@ export function useContentQueue() {
   });
 }
 
+export function useCreateContentPost() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (post: {
+      title: string;
+      platforms: string[];
+      scheduled?: string;
+      twitter?: string;
+      linkedin?: string;
+      hashtags?: string;
+      status?: ContentPostStatus;
+    }) => {
+      return fetchApi<ContentPost>("/api/content/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(post),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["content-queue"] });
+    },
+  });
+}
+
+export function useDeleteContentPost() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (postNumber: number) => {
+      return fetchApi<ContentPost[]>(
+        `/api/content/queue?postNumber=${postNumber}`,
+        { method: "DELETE" }
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["content-queue"] });
+    },
+  });
+}
+
 export function useUpdateContentStatus() {
   const queryClient = useQueryClient();
 

@@ -16,7 +16,8 @@ if (!password) {
 }
 
 bcrypt.hash(password, 10).then((hash) => {
+  const escaped = hash.replace(/\$/g, "\\$");
   console.log("\nAdd this to your .env file:\n");
-  console.log(`ADMIN_PASSWORD_HASH=${hash}`);
-  console.log();
+  console.log(`ADMIN_PASSWORD_HASH=${escaped}`);
+  console.log("\n($ signs are escaped with \\ to prevent dotenv-expand from corrupting the hash)");
 });

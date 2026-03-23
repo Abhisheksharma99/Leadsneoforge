@@ -348,6 +348,38 @@ export interface GeneratedPost {
   method: "ai" | "template";
 }
 
+// ─── Campaigns ──────────────────────────────────────────────────────────────
+
+export type CampaignStatus = "draft" | "active" | "paused" | "completed";
+export type ChannelType = "reddit" | "twitter" | "linkedin" | "email" | "blog" | "seo";
+
+export interface CampaignTask {
+  id: string;
+  title: string;
+  channel: ChannelType;
+  status: "pending" | "in_progress" | "done";
+  dueDate?: string;
+}
+
+export interface Campaign {
+  id: string;
+  name: string;
+  description: string;
+  status: CampaignStatus;
+  channels: ChannelType[];
+  startDate: string;
+  endDate?: string;
+  budget?: string;
+  kpis: {
+    impressions: number;
+    clicks: number;
+    conversions: number;
+    engagement: number;
+  };
+  tasks: CampaignTask[];
+  createdAt: string;
+}
+
 // ─── API Response Wrapper ───────────────────────────────────────────────────
 export interface ApiResponse<T> {
   data: T;
